@@ -81,7 +81,10 @@ echo -e "\033[1mAPI-Key:\033[0m $STORED_API_KEY"
 IPV6=$(curl -s -6 https://api6.ipify.org 2>/dev/null || echo "Nicht verfügbar")
 echo -e "\033[1mÖffentliche IPv6:\033[0m $IPV6"
 echo -e "\033[1mÖffentliche IPv4:\033[0m $(curl -s -4 https://api.ipify.org 2>/dev/null || echo "Nicht verfügbar")"
-echo -e "\nDu kannst den Wake-on-LAN Befehl mit folgendem curl-Befehl ausführen:"
+echo -e "\nDu kannst den Wake-on-LAN Befehl mit einem der folgenden Befehle ausführen:"
+echo "Linux/Mac:"
 echo "curl -X POST 'http://[$IPV6]:5000/wake?key=$STORED_API_KEY'"
+echo -e "\nWindows PowerShell:"
+echo "Invoke-WebRequest -Uri \"http://[$IPV6]:5000/wake?key=$STORED_API_KEY\" -Method Post"
 
 exit 0
