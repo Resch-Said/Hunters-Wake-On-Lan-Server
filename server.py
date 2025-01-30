@@ -47,10 +47,5 @@ def wake():
 if __name__ == '__main__':
     print(f"API Key: {API_KEY}")
     print(f"Target MAC: {TARGET_MAC}")
-    
-    ipv6 = get_ipv6_address()
-    if ipv6:
-        print(f"Server startet auf http://[{ipv6}]:{PORT}")
-        app.run(host=ipv6, port=PORT)
-    else:
-        print("Fehler: Keine IPv6-Adresse gefunden!")
+    print(f"Server startet auf http://[::]:{PORT}")
+    app.run(host='::', port=PORT)
