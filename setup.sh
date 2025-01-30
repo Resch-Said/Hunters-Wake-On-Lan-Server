@@ -65,4 +65,17 @@ sudo systemctl start $SERVICE_NAME
 # Status anzeigen
 echo -e "\n\033[1mInstallation abgeschlossen! Service-Status:\033[0m"
 sudo systemctl status $SERVICE_NAME --no-pager | head -n 10
+
+# API-Key aus .env Datei lesen
+STORED_API_KEY=$(grep API_KEY .env | cut -d'=' -f2)
+
+# IP und API-Key Information anzeigen
+echo -e "\n\033[1mWichtige Informationen:\033[0m"
+echo -e "\033[1mAPI-Key:\033[0m $STORED_API_KEY"
+IPV6=$(curl -s -6 https://api6.ipify.org 2>/dev/null || echo "Nicht verfügbar")
+echo -e "\033[1mÖffentliche IPv6:\033[0m $IPV6"
+echo -e "\033[1mÖffentliche IPv4:\033[0m $(curl -s -4 https://api.ipify.org 2>/dev/null || echo "Nicht verfügbar")"
+echo -e "\nDu kannst den Wake-on-LAN Befehl mit folgendem curl-Befehl ausführen:"
+echo "curl -X POST 'http://[$IPV6]:5000/wake?key=$STORED_API_KEY'"
+
 exit 0
