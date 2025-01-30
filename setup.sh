@@ -12,7 +12,13 @@ sudo apt install -y git python3-venv python3-pip
 if [ -d "$INSTALL_DIR" ]; then
     echo "Updating existing repository..."
     cd "$INSTALL_DIR"
-    git pull
+    # Versuche zu pullen, wenn es fehlschlägt wegen lokaler Änderungen, dann reset
+    if ! git pull; then
+        echo "Merge-Konflikt erkannt. Setze lokale Änderungen zurück..."
+        git reset --hard
+        git clean -fd
+        git pull
+    fi
 else
     echo "Cloning repository..."
     git clone "$REPO_URL" "$INSTALL_DIR"
