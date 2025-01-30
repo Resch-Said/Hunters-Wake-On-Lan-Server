@@ -64,6 +64,5 @@ sudo systemctl start $SERVICE_NAME
 
 # Status anzeigen
 echo -e "\n\033[1mInstallation abgeschlossen! Service-Status:\033[0m"
-sudo systemctl status $SERVICE_NAME
-
-echo -e "\n\033[32mAuf GitHub gehostete Version: $(git log -1 --pretty=format:'%h - %s (%ci)')\033[0m"
+sudo systemctl status $SERVICE_NAME --no-pager | head -n 10
+exit 0
