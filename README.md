@@ -20,7 +20,13 @@ git clone https://github.com/Resch-Said/Hunters-Wake-On-Lan-Server.git
 cd Hunters-Wake-On-Lan-Server
 ```
 
-2. Abhängigkeiten installieren:
+2. Virtuelle Umgebung erstellen und aktivieren:
+```bash
+python3 -m venv ./venv
+source venv/bin/activate
+```
+
+3. Abhängigkeiten aus requirements.txt installieren:
 ```bash
 pip install -r requirements.txt
 ```
@@ -36,13 +42,16 @@ sudo nano /etc/systemd/system/wol-server.service
 ```ini
 [Unit]
 Description=Wake-on-LAN Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-ExecStart=/usr/bin/python3 /pfad/zur/app.py
-WorkingDirectory=/pfad/zum/projektverzeichnis
+ExecStart=/home/pi/Hunters-Wake-On-Lan-Server/bin/python /home/pi/Hunters-Wake-On-Lan-Server/server.py
+WorkingDirectory=/home/pi/Hunters-Wake-On-Lan-Server
 User=pi
 Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
 
 [Install]
 WantedBy=multi-user.target
@@ -50,6 +59,7 @@ WantedBy=multi-user.target
 
 3. Service aktivieren und starten:
 ```bash
+sudo systemctl daemon-reload
 sudo systemctl enable wol-server
 sudo systemctl start wol-server
 ```
