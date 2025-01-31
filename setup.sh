@@ -6,7 +6,7 @@ SERVICE_NAME="wol-server"
 
 # Voraussetzungen installieren
 sudo apt update
-sudo apt install -y git python3-venv python3-pip
+sudo apt install -y git python3-venv python3-pip iputils-ping
 
 # Repository klonen oder updaten
 if [ -d "$INSTALL_DIR" ]; then
@@ -36,13 +36,17 @@ pip install -r requirements.txt
 if [ ! -f .env ]; then
     echo "Erstelle .env Datei..."
     read -p "Gib deinen Telegram Bot Token ein: " TELEGRAM_TOKEN
-    read -p "Gib die MAC-Adresse ein: " TARGET_MAC
     read -p "Gib die erlaubten Telegram User IDs ein (kommagetrennt): " ALLOWED_USERS
     
     echo "TELEGRAM_TOKEN=$TELEGRAM_TOKEN" > .env
-    echo "TARGET_MAC=$TARGET_MAC" >> .env
     echo "ALLOWED_USERS=$ALLOWED_USERS" >> .env
     chmod 600 .env
+fi
+
+# Erstelle leere computers.json wenn sie nicht existiert
+if [ ! -f computers.json ]; then
+    echo "{}" > computers.json
+    chmod 600 computers.json
 fi
 
 # Systemd Service aktualisieren
@@ -74,20 +78,11 @@ sudo systemctl start $SERVICE_NAME
 echo -e "\n\033[1mInstallation abgeschlossen! Service-Status:\033[0m"
 sudo systemctl status $SERVICE_NAME --no-pager | head -n 10
 
-# API-Key aus .env Datei lesen
-STORED_API_KEY=$(grep TELEGRAM_TOKEN .env | cut -d'=' -f2)
-
-# IP und API-Key Information anzeigen
+# Anzeige der Konfiguration am Ende
 echo -e "\n\033[1mWichtige Informationen:\033[0m"
-echo -e "Bot ist eingerichtet! Suche deinen Bot auf Telegram und sende /start"
-echo -e "Erlaubte User IDs: $ALLOWED_USERS"
-IPV6=$(curl -s -6 https://api6.ipify.org 2>/dev/null || echo "Nicht verfügbar")
-echo -e "\033[1mÖffentliche IPv6:\033[0m $IPV6"
-echo -e "\033[1mÖffentliche IPv4:\033[0m $(curl -s -4 https://api.ipify.org 2>/dev/null || echo "Nicht verfügbar")"
-echo -e "\nDu kannst den Wake-on-LAN Befehl mit einem der folgenden Befehle ausführen:"
-echo "Linux/Mac:"
-echo "curl -X POST 'http://[$IPV6]:5000/wake?key=$STORED_API_KEY'"
-echo -e "\nWindows PowerShell:"
-echo "Invoke-WebRequest -Uri \"http://[$IPV6]:5000/wake?key=$STORED_API_KEY\" -Method Post"
+echo -e "🤖 Bot ist eingerichtet! Suche deinen Bot auf Telegram und sende /start"
+echo -e "👤 Erlaubte User IDs: $ALLOWED_USERS"
+echo -e "\n💡 Nutze /add [name] [mac] [ip] um Computer hinzuzufügen"
+echo -e "   Beispiel: /add pc1 00:11:22:33:44:55 192.168.1.100"
 
 exit 0
