@@ -58,12 +58,15 @@ After=network-online.target
 Wants=network-online.target
 
 [Service]
-ExecStart=$INSTALL_DIR/venv/bin/python3 server.py
+Type=simple
 WorkingDirectory=$INSTALL_DIR
+Environment=PYTHONUNBUFFERED=1
+Environment=VIRTUAL_ENV=$INSTALL_DIR/venv
+Environment=PATH=$INSTALL_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin
+ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/server.py
 User=pi
 Restart=always
 RestartSec=10
-Environment="PATH=$INSTALL_DIR/venv/bin:/usr/bin:/bin"
 
 [Install]
 WantedBy=multi-user.target
