@@ -63,7 +63,7 @@ WorkingDirectory=$INSTALL_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=VIRTUAL_ENV=$INSTALL_DIR/venv
 Environment=PATH=$INSTALL_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=$INSTALL_DIR/venv/bin/python $INSTALL_DIR/server.py
+ExecStart=/bin/bash -c 'cd $INSTALL_DIR && source venv/bin/activate && python3 server.py'
 User=pi
 Restart=always
 RestartSec=10
