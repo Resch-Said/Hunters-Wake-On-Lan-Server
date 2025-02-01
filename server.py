@@ -12,21 +12,44 @@ import subprocess
 
 # Logging konfigurieren
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-
-# Konstanten
-COMPUTERS_FILE = "computers.json"
+logger = logging.getLogger(__name__)
 
 # Umgebungsvariablen laden
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
 ALLOWED_USERS = [int(id) for id in os.getenv('ALLOWED_USERS', '').split(',') if id]
+COMPUTERS_FILE = os.getenv('COMPUTERS_FILE', 'computers.json')
+MAX_TRIES = int(os.getenv('MAX_TRIES', '30'))  # Anzahl der Versuche für Computer-Status-Check
+CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '10'))  # Wartezeit zwischen Status-Checks in Sekunden
 
 def load_computers():
-    """Lädt die gespeicherten Computer"""
-    if os.path.exists(COMPUTERS_FILE):
-        with open(COMPUTERS_FILE, 'r') as f:
-            return json.load(f)
-    return {}
+    """Lädt die gespeicherten Computer mit verbesserter Fehlerbehandlung"""
+    try:
+        if not os.path.exists(COMPUTERS_FILE):
+            logger.warning(f"Computers file {COMPUTERS_FILE} not found. Creating empty file.")
+            save_computers({})
+            return {}
+            
+        with open(COMPUTERS_FILE, 'r', encoding='utf-8') as f:
+            try:
+                data = json.load(f)
+                if not isinstance(data, dict):
+                    logger.error("Invalid data format in computers file. Expected dictionary.")
+                    return {}
+                return data
+            except json.JSONDecodeError as e:
+                logger.error(f"Error decoding JSON from {COMPUTERS_FILE}: {str(e)}")
+                # Erstelle Backup der fehlerhaften Datei
+                backup_file = f"{COMPUTERS_FILE}.backup"
+                try:
+                    os.rename(COMPUTERS_FILE, backup_file)
+                    logger.info(f"Created backup of corrupted file as {backup_file}")
+                except OSError as e:
+                    logger.error(f"Failed to create backup file: {str(e)}")
+                return {}
+    except OSError as e:
+        logger.error(f"Error accessing {COMPUTERS_FILE}: {str(e)}")
+        return {}
 
 def save_computers(computers):
     """Speichert die Computer"""
