@@ -22,6 +22,28 @@ REPO_URL="https://github.com/Resch-Said/Hunters-Wake-On-Lan-Server.git"
 INSTALL_DIR="/home/$CURRENT_USER/Hunters-Wake-On-Lan-Server"
 SERVICE_NAME="wol-server"
 
+# Funktion zum Entfernen des existierenden Services
+cleanup_service() {
+    echo -e "${YELLOW}Prüfe auf existierenden Service...${NC}"
+    if systemctl is-active --quiet $SERVICE_NAME; then
+        echo -e "${YELLOW}Stoppe existierenden Service...${NC}"
+        sudo systemctl stop $SERVICE_NAME
+    fi
+    
+    if systemctl is-enabled --quiet $SERVICE_NAME 2>/dev/null; then
+        echo -e "${YELLOW}Deaktiviere existierenden Service...${NC}"
+        sudo systemctl disable $SERVICE_NAME
+    fi
+    
+    if [ -f "/etc/systemd/system/$SERVICE_NAME.service" ]; then
+        echo -e "${YELLOW}Entferne existierende Service-Datei...${NC}"
+        sudo rm "/etc/systemd/system/$SERVICE_NAME.service"
+        sudo systemctl daemon-reload
+    fi
+    
+    echo -e "${GREEN}Service-Bereinigung abgeschlossen.${NC}"
+}
+
 # Funktion zur Überprüfung der Abhängigkeiten
 check_dependencies() {
     echo -e "${YELLOW}Überprüfe Systemvoraussetzungen...${NC}"
@@ -82,6 +104,9 @@ main() {
         echo -e "${RED}Netzwerktest fehlgeschlagen. Installation wird abgebrochen.${NC}"
         exit 1
     fi
+    
+    # Entferne existierenden Service
+    cleanup_service
 
     # Repository klonen oder updaten
     if [ -d "$INSTALL_DIR" ]; then
