@@ -9,6 +9,8 @@ import re
 import asyncio
 import platform
 import subprocess
+from telegram.request import HTTPXRequest
+from telegram.error import TimedOut, NetworkError
 
 # Logging konfigurieren
 logging.basicConfig(
@@ -17,6 +19,46 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+def ensure_env_defaults():
+    """Stellt sicher, dass alle Standardwerte in der .env-Datei vorhanden sind"""
+    env_path = '.env'
+    defaults = {
+        'CONNECT_TIMEOUT': '30.0',
+        'READ_TIMEOUT': '30.0',
+        'WRITE_TIMEOUT': '30.0',
+        'POOL_TIMEOUT': '30.0',
+        'MAX_TRIES': '30',
+        'CHECK_INTERVAL': '10',
+        'COMPUTERS_FILE': 'computers.json'
+    }
+    
+    # Existierende Werte laden
+    existing_values = {}
+    if os.path.exists(env_path):
+        with open(env_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if '=' in line and not line.startswith('#'):
+                    key, value = line.strip().split('=', 1)
+                    existing_values[key] = value
+
+    # Fehlende Werte hinzufügen
+    needs_update = False
+    for key, value in defaults.items():
+        if key not in existing_values:
+            existing_values[key] = value
+            needs_update = True
+            logger.info(f"Füge Standardwert hinzu: {key}={value}")
+
+    # Datei aktualisieren, wenn Änderungen vorgenommen wurden
+    if needs_update:
+        with open(env_path, 'w', encoding='utf-8') as f:
+            for key, value in existing_values.items():
+                f.write(f"{key}={value}\n")
+        logger.info("Standardwerte wurden zur .env-Datei hinzugefügt")
+
+# Standardwerte sicherstellen
+ensure_env_defaults()
+
 # Umgebungsvariablen laden
 load_dotenv()
 TELEGRAM_TOKEN = os.getenv('TELEGRAM_TOKEN')
@@ -24,6 +66,11 @@ ALLOWED_USERS = [int(id) for id in os.getenv('ALLOWED_USERS', '').split(',') if 
 COMPUTERS_FILE = os.getenv('COMPUTERS_FILE', 'computers.json')
 MAX_TRIES = int(os.getenv('MAX_TRIES', '30'))  # Anzahl der Versuche für Computer-Status-Check
 CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '10'))  # Wartezeit zwischen Status-Checks in Sekunden
+# Timeout-Einstellungen
+CONNECT_TIMEOUT = float(os.getenv('CONNECT_TIMEOUT', '30.0'))  # Verbindungs-Timeout in Sekunden
+READ_TIMEOUT = float(os.getenv('READ_TIMEOUT', '30.0'))  # Lese-Timeout in Sekunden
+WRITE_TIMEOUT = float(os.getenv('WRITE_TIMEOUT', '30.0'))  # Schreib-Timeout in Sekunden
+POOL_TIMEOUT = float(os.getenv('POOL_TIMEOUT', '30.0'))  # Pool-Timeout in Sekunden
 
 # Debug-Ausgabe der Konfiguration
 logger.debug(f"Geladene Konfiguration:")
@@ -281,40 +328,49 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Startet den Bot"""
-    logger.info("🤖 Wake-on-LAN Bot wird gestartet...")
+    # Erstelle einen benutzerdefinierten Request-Handler mit angepassten Timeouts
+    request = HTTPXRequest(
+        connect_timeout=CONNECT_TIMEOUT,
+        read_timeout=READ_TIMEOUT,
+        write_timeout=WRITE_TIMEOUT,
+        pool_timeout=POOL_TIMEOUT
+    )
     
-    if not TELEGRAM_TOKEN:
-        logger.error("Kein Telegram Token gefunden!")
-        return
-        
-    if not ALLOWED_USERS:
-        logger.warning("Keine erlaubten Benutzer konfiguriert!")
-    
-    application = Application.builder().token(TELEGRAM_TOKEN).build()
-    
-    # Handler registrieren
-    handlers = [
-        CommandHandler("start", start),
-        CommandHandler("wake", wake),
-        CommandHandler("wakeall", wakeall),
-        CommandHandler("add", add_computer),
-        CommandHandler("remove", remove_computer),
-        CommandHandler("list", list_computers),
-        CommandHandler("status", status)
-    ]
-    
-    for handler in handlers:
-        application.add_handler(handler)
-    
-    # Füge einen Error Handler hinzu
+    # Initialisiere die Anwendung mit dem benutzerdefinierten Request-Handler
+    application = Application.builder()\
+        .token(TELEGRAM_TOKEN)\
+        .request(request)\
+        .build()
+
+    # Füge Error Handler hinzu
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        logger.error(f"Fehler beim Verarbeiten eines Updates: {context.error}")
-    
+        logger.error(f"Exception while handling an update: {context.error}")
+        
+        if isinstance(context.error, TimedOut):
+            logger.info("Timeout aufgetreten - Versuche es erneut...")
+            return
+        
+        if isinstance(context.error, NetworkError):
+            logger.info("Netzwerkfehler aufgetreten - Warte kurz und versuche es erneut...")
+            await asyncio.sleep(1)  # Kurze Pause vor erneutem Versuch
+            return
+
+        # Für andere Fehler
+        logger.error("Ein unerwarteter Fehler ist aufgetreten:", exc_info=context.error)
+
     application.add_error_handler(error_handler)
     
-    # Bot starten
-    logger.info("Bot ist bereit und wartet auf Befehle...")
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Füge Command Handler hinzu
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("add", add_computer))
+    application.add_handler(CommandHandler("remove", remove_computer))
+    application.add_handler(CommandHandler("list", list_computers))
+    application.add_handler(CommandHandler("wake", wake))
+    application.add_handler(CommandHandler("wakeall", wakeall))
+    application.add_handler(CommandHandler("status", status))
+    
+    # Starte den Bot
+    application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 if __name__ == '__main__':
     main()
