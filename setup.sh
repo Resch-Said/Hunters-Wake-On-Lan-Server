@@ -186,17 +186,16 @@ Restart=always
 RestartSec=10
 
 # Logging
-StandardOutput=append:/var/log/$SERVICE_NAME.log
-StandardError=append:/var/log/$SERVICE_NAME.error.log
+StandardOutput=append:$INSTALL_DIR/bot.log
+StandardError=append:$INSTALL_DIR/bot.error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
     # Erstelle und setze Berechtigungen für Log-Dateien
-    sudo touch /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
-    sudo chown $CURRENT_USER:$CURRENT_USER /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
-    sudo chmod 644 /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
+    touch "$INSTALL_DIR/bot.log" "$INSTALL_DIR/bot.error.log"
+    chmod 644 "$INSTALL_DIR/bot.log" "$INSTALL_DIR/bot.error.log"
 
     # Service aktivieren
     sudo systemctl daemon-reload
@@ -208,9 +207,9 @@ EOF
     if ! systemctl is-active --quiet $SERVICE_NAME; then
         echo -e "${RED}Service konnte nicht gestartet werden. Überprüfe die Logs:${NC}"
         echo -e "${YELLOW}Service Log:${NC}"
-        tail -n 20 /var/log/$SERVICE_NAME.log
+        tail -n 20 "$INSTALL_DIR/bot.log"
         echo -e "\n${YELLOW}Error Log:${NC}"
-        tail -n 20 /var/log/$SERVICE_NAME.error.log
+        tail -n 20 "$INSTALL_DIR/bot.error.log"
         echo -e "\n${YELLOW}Systemd Status:${NC}"
         sudo systemctl status $SERVICE_NAME --no-pager
     else
