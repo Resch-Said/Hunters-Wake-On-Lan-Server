@@ -12,8 +12,8 @@ import subprocess
 
 # Logging konfigurieren
 logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.DEBUG  # Ändern auf DEBUG für mehr Details
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
 )
 logger = logging.getLogger(__name__)
 
@@ -108,13 +108,9 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
 async def check_permission(update: Update):
     """Prüft ob der Benutzer berechtigt ist"""
     if not update or not update.effective_user:
-        logger.warning("Update oder User-Objekt ist None")
         return False
         
     user_id = update.effective_user.id
-    logger.debug(f"Berechtigungsprüfung für User ID: {user_id}")
-    logger.debug(f"Erlaubte User IDs: {ALLOWED_USERS}")
-    
     if user_id not in ALLOWED_USERS:
         logger.warning(f"Unbefugter Zugriffsversuch von User ID: {user_id}")
         if update.message:
@@ -297,7 +293,6 @@ def main():
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Handler registrieren
-    logger.debug("Registriere Command Handler...")
     handlers = [
         CommandHandler("start", start),
         CommandHandler("wake", wake),
@@ -310,16 +305,15 @@ def main():
     
     for handler in handlers:
         application.add_handler(handler)
-        logger.debug(f"Handler für {handler.command[0]} registriert")
     
     # Füge einen Error Handler hinzu
     async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-        logger.error(f"Exception while handling an update: {context.error}")
+        logger.error(f"Fehler beim Verarbeiten eines Updates: {context.error}")
     
     application.add_error_handler(error_handler)
     
     # Bot starten
-    logger.info("Starte Polling...")
+    logger.info("Bot ist bereit und wartet auf Befehle...")
     application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
