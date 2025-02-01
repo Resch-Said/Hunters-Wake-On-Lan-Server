@@ -188,7 +188,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/list - Zeigt alle Computer\n"
         "/add [name] [mac] [ip] - Fügt einen Computer hinzu\n"
         "/remove [name] - Entfernt einen Computer\n"
-        "/status - Zeigt den Bot-Status"
+        "/status - Zeigt den Online-Status aller Computer"
     )
 
 async def add_computer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -316,22 +316,28 @@ async def wakeall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message)
 
-async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Zeigt den Status des Bots"""
+async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Zeigt den Status aller Computer an"""
     if not await check_permission(update): return
     
-    user_id = update.effective_user.id
     computers = load_computers()
+    if not computers:
+        await update.message.reply_text("Keine Computer gespeichert!")
+        return
     
-    await update.message.reply_text(
-        f"🤖 Bot ist aktiv\n"
-        f"👤 Deine User ID: {user_id}\n"
-        f"💻 Anzahl Computer: {len(computers)}"
-    )
+    status_message = await update.message.reply_text("🔍 Überprüfe Computer-Status...")
+    
+    message = "🖥️ Computer Status:\n\n"
+    for name, data in computers.items():
+        is_online = await ping(data['ip'])
+        status = "🟢 Online" if is_online else "🔴 Offline"
+        message += f"• {name}: {status}\n"
+    
+    await status_message.edit_text(message)
 
 def main():
     """Startet den Bot"""
-    # Erstelle einen benutzerdefinierten Request-Handler mit angepassten Timeouts
+    # Request-Parameter für bessere Timeout-Behandlung
     request = HTTPXRequest(
         connect_timeout=CONNECT_TIMEOUT,
         read_timeout=READ_TIMEOUT,
@@ -339,7 +345,6 @@ def main():
         pool_timeout=POOL_TIMEOUT
     )
     
-    # Initialisiere die Anwendung mit dem benutzerdefinierten Request-Handler
     application = Application.builder()\
         .token(TELEGRAM_TOKEN)\
         .request(request)\
@@ -370,7 +375,7 @@ def main():
     application.add_handler(CommandHandler("list", list_computers))
     application.add_handler(CommandHandler("wake", wake))
     application.add_handler(CommandHandler("wakeall", wakeall))
-    application.add_handler(CommandHandler("status", status))
+    application.add_handler(CommandHandler("status", check_status))
     
     # Starte den Bot
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)

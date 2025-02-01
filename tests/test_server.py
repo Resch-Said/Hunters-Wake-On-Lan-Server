@@ -2,7 +2,7 @@ import unittest
 import os
 import json
 import tempfile
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 import sys
 import asyncio
 
@@ -147,12 +147,58 @@ class TestWakeOnLANServer(unittest.TestCase):
         mock_update.effective_user = None
         self.assertFalse(await check_permission(mock_update))
 
+    @patch('server.ping')
+    @patch('server.Update')
+    async def test_check_status(self, mock_update, mock_ping):
+        """Test computer status checking"""
+        # Set up test data
+        test_computers = {
+            "test_pc1": {"mac": "00:11:22:33:44:55", "ip": "192.168.1.100"},
+            "test_pc2": {"mac": "AA:BB:CC:DD:EE:FF", "ip": "192.168.1.101"}
+        }
+        save_computers(test_computers, self.computers_file)
+        
+        # Set up mock user and message
+        mock_user = MagicMock()
+        mock_user.id = 12345
+        mock_update.effective_user = mock_user
+        mock_message = AsyncMock()
+        mock_update.message = mock_message
+        mock_status_message = AsyncMock()
+        mock_message.reply_text.return_value = mock_status_message
+        
+        # Set up ping responses
+        mock_ping.side_effect = [True, False]  # First PC online, second offline
+        
+        # Set allowed users
+        os.environ['ALLOWED_USERS'] = '12345'
+        
+        # Create mock context
+        mock_context = MagicMock()
+        
+        # Import check_status here to avoid circular imports
+        from server import check_status
+        
+        # Test the function
+        await check_status(mock_update, mock_context)
+        
+        # Verify ping was called for both computers
+        self.assertEqual(mock_ping.call_count, 2)
+        mock_ping.assert_any_call("192.168.1.100")
+        mock_ping.assert_any_call("192.168.1.101")
+        
+        # Verify the status message was sent and updated
+        mock_message.reply_text.assert_called_once_with("🔍 Überprüfe Computer-Status...")
+        expected_status = "🖥️ Computer Status:\n\n• test_pc1: 🟢 Online\n• test_pc2: 🔴 Offline\n"
+        mock_status_message.edit_text.assert_called_once_with(expected_status)
+
 def run_async_tests():
     """Helper function to run async tests"""
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
         *(test() for test in [
-            TestWakeOnLANServer('test_check_permission').test_check_permission
+            TestWakeOnLANServer('test_check_permission').test_check_permission,
+            TestWakeOnLANServer('test_check_status').test_check_status
         ])
     ))
 
