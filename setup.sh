@@ -175,19 +175,47 @@ WorkingDirectory=$INSTALL_DIR
 Environment=PYTHONUNBUFFERED=1
 Environment=VIRTUAL_ENV=$INSTALL_DIR/venv
 Environment=PATH=$INSTALL_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin
-ExecStart=/bin/bash -c 'cd $INSTALL_DIR && source venv/bin/activate && python3 server.py'
+Environment=PYTHONPATH=$INSTALL_DIR
+Environment=LC_ALL=C.UTF-8
+Environment=LANG=C.UTF-8
+
+ExecStart=$INSTALL_DIR/venv/bin/python3 $INSTALL_DIR/server.py
 User=$CURRENT_USER
+Group=$CURRENT_USER
 Restart=always
 RestartSec=10
+
+# Logging
+StandardOutput=append:/var/log/$SERVICE_NAME.log
+StandardError=append:/var/log/$SERVICE_NAME.error.log
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+    # Erstelle und setze Berechtigungen für Log-Dateien
+    sudo touch /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
+    sudo chown $CURRENT_USER:$CURRENT_USER /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
+    sudo chmod 644 /var/log/$SERVICE_NAME.log /var/log/$SERVICE_NAME.error.log
+
     # Service aktivieren
     sudo systemctl daemon-reload
     sudo systemctl enable $SERVICE_NAME
     sudo systemctl start $SERVICE_NAME
+
+    # Warte kurz und prüfe den Status
+    sleep 3
+    if ! systemctl is-active --quiet $SERVICE_NAME; then
+        echo -e "${RED}Service konnte nicht gestartet werden. Überprüfe die Logs:${NC}"
+        echo -e "${YELLOW}Service Log:${NC}"
+        tail -n 20 /var/log/$SERVICE_NAME.log
+        echo -e "\n${YELLOW}Error Log:${NC}"
+        tail -n 20 /var/log/$SERVICE_NAME.error.log
+        echo -e "\n${YELLOW}Systemd Status:${NC}"
+        sudo systemctl status $SERVICE_NAME --no-pager
+    else
+        echo -e "${GREEN}Service erfolgreich gestartet!${NC}"
+    fi
 
     # Status anzeigen
     echo -e "\n\033[1mInstallation abgeschlossen! Service-Status:\033[0m"
