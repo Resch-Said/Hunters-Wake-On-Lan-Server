@@ -11,7 +11,10 @@ import platform
 import subprocess
 
 # Logging konfigurieren
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.DEBUG  # Ändern auf DEBUG für mehr Details
+)
 logger = logging.getLogger(__name__)
 
 # Umgebungsvariablen laden
@@ -21,6 +24,11 @@ ALLOWED_USERS = [int(id) for id in os.getenv('ALLOWED_USERS', '').split(',') if 
 COMPUTERS_FILE = os.getenv('COMPUTERS_FILE', 'computers.json')
 MAX_TRIES = int(os.getenv('MAX_TRIES', '30'))  # Anzahl der Versuche für Computer-Status-Check
 CHECK_INTERVAL = int(os.getenv('CHECK_INTERVAL', '10'))  # Wartezeit zwischen Status-Checks in Sekunden
+
+# Debug-Ausgabe der Konfiguration
+logger.debug(f"Geladene Konfiguration:")
+logger.debug(f"Token verfügbar: {'Ja' if TELEGRAM_TOKEN else 'Nein'}")
+logger.debug(f"Erlaubte Benutzer: {ALLOWED_USERS}")
 
 def load_computers():
     """Lädt die gespeicherten Computer mit verbesserter Fehlerbehandlung"""
@@ -99,15 +107,33 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
 
 async def check_permission(update: Update):
     """Prüft ob der Benutzer berechtigt ist"""
-    if update.effective_user.id not in ALLOWED_USERS:
-        await update.message.reply_text("❌ Sorry, du bist nicht berechtigt diesen Bot zu nutzen.")
+    if not update or not update.effective_user:
+        logger.warning("Update oder User-Objekt ist None")
+        return False
+        
+    user_id = update.effective_user.id
+    logger.debug(f"Berechtigungsprüfung für User ID: {user_id}")
+    logger.debug(f"Erlaubte User IDs: {ALLOWED_USERS}")
+    
+    if user_id not in ALLOWED_USERS:
+        logger.warning(f"Unbefugter Zugriffsversuch von User ID: {user_id}")
+        if update.message:
+            await update.message.reply_text("❌ Sorry, du bist nicht berechtigt diesen Bot zu nutzen.")
         return False
     return True
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sendet eine Begrüßungsnachricht"""
-    if not await check_permission(update): return
+    logger.debug("Start-Befehl empfangen")
+    if not update or not update.message:
+        logger.error("Update oder Message-Objekt ist None")
+        return
+        
+    if not await check_permission(update):
+        logger.warning("Berechtigungsprüfung fehlgeschlagen")
+        return
     
+    logger.debug("Sende Begrüßungsnachricht")
     await update.message.reply_text(
         "🖥️ Wake-on-LAN Bot\n\n"
         "Verfügbare Befehle:\n"
@@ -259,21 +285,42 @@ async def status(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def main():
     """Startet den Bot"""
-    print("🤖 Wake-on-LAN Bot wird gestartet...")
+    logger.info("🤖 Wake-on-LAN Bot wird gestartet...")
+    
+    if not TELEGRAM_TOKEN:
+        logger.error("Kein Telegram Token gefunden!")
+        return
+        
+    if not ALLOWED_USERS:
+        logger.warning("Keine erlaubten Benutzer konfiguriert!")
     
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Handler registrieren
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("wake", wake))
-    application.add_handler(CommandHandler("wakeall", wakeall))
-    application.add_handler(CommandHandler("add", add_computer))
-    application.add_handler(CommandHandler("remove", remove_computer))
-    application.add_handler(CommandHandler("list", list_computers))
-    application.add_handler(CommandHandler("status", status))
+    logger.debug("Registriere Command Handler...")
+    handlers = [
+        CommandHandler("start", start),
+        CommandHandler("wake", wake),
+        CommandHandler("wakeall", wakeall),
+        CommandHandler("add", add_computer),
+        CommandHandler("remove", remove_computer),
+        CommandHandler("list", list_computers),
+        CommandHandler("status", status)
+    ]
+    
+    for handler in handlers:
+        application.add_handler(handler)
+        logger.debug(f"Handler für {handler.command[0]} registriert")
+    
+    # Füge einen Error Handler hinzu
+    async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        logger.error(f"Exception while handling an update: {context.error}")
+    
+    application.add_error_handler(error_handler)
     
     # Bot starten
-    application.run_polling()
+    logger.info("Starte Polling...")
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 if __name__ == '__main__':
     main()
