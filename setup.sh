@@ -48,12 +48,24 @@ cleanup_service() {
 check_dependencies() {
     echo -e "${YELLOW}Überprüfe Systemvoraussetzungen...${NC}"
     
-    DEPS=("git" "python3" "python3-venv" "pip3" "ping")
+    # Befehle, die direkt geprüft werden können
+    COMMANDS=("git" "python3" "pip3" "ping")
+    # Pakete, die über dpkg geprüft werden müssen
+    PACKAGES=("python3-venv")
+    
     MISSING_DEPS=()
     
-    for dep in "${DEPS[@]}"; do
-        if ! command -v $dep &> /dev/null; then
-            MISSING_DEPS+=($dep)
+    # Prüfe Befehle
+    for cmd in "${COMMANDS[@]}"; do
+        if ! command -v $cmd &> /dev/null; then
+            MISSING_DEPS+=($cmd)
+        fi
+    done
+    
+    # Prüfe Pakete
+    for pkg in "${PACKAGES[@]}"; do
+        if ! dpkg -l | grep -q "^ii.*$pkg "; then
+            MISSING_DEPS+=($pkg)
         fi
     done
     
