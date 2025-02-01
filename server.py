@@ -19,9 +19,8 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def ensure_env_defaults():
+def ensure_env_defaults(env_path='.env'):
     """Stellt sicher, dass alle Standardwerte in der .env-Datei vorhanden sind"""
-    env_path = '.env'
     defaults = {
         'CONNECT_TIMEOUT': '30.0',
         'READ_TIMEOUT': '30.0',
@@ -77,15 +76,24 @@ logger.debug(f"Geladene Konfiguration:")
 logger.debug(f"Token verfügbar: {'Ja' if TELEGRAM_TOKEN else 'Nein'}")
 logger.debug(f"Erlaubte Benutzer: {ALLOWED_USERS}")
 
-def load_computers():
+def save_computers(computers, file_path=None):
+    """Speichert die Computer"""
+    if file_path is None:
+        file_path = os.getenv('COMPUTERS_FILE', 'computers.json')
+    with open(file_path, 'w') as f:
+        json.dump(computers, f, indent=2)
+
+def load_computers(file_path=None):
     """Lädt die gespeicherten Computer mit verbesserter Fehlerbehandlung"""
+    if file_path is None:
+        file_path = os.getenv('COMPUTERS_FILE', 'computers.json')
     try:
-        if not os.path.exists(COMPUTERS_FILE):
-            logger.warning(f"Computers file {COMPUTERS_FILE} not found. Creating empty file.")
-            save_computers({})
+        if not os.path.exists(file_path):
+            logger.warning(f"Computers file {file_path} not found. Creating empty file.")
+            save_computers({}, file_path)
             return {}
             
-        with open(COMPUTERS_FILE, 'r', encoding='utf-8') as f:
+        with open(file_path, 'r', encoding='utf-8') as f:
             try:
                 data = json.load(f)
                 if not isinstance(data, dict):
@@ -93,23 +101,18 @@ def load_computers():
                     return {}
                 return data
             except json.JSONDecodeError as e:
-                logger.error(f"Error decoding JSON from {COMPUTERS_FILE}: {str(e)}")
+                logger.error(f"Error decoding JSON from {file_path}: {str(e)}")
                 # Erstelle Backup der fehlerhaften Datei
-                backup_file = f"{COMPUTERS_FILE}.backup"
+                backup_file = f"{file_path}.backup"
                 try:
-                    os.rename(COMPUTERS_FILE, backup_file)
+                    os.rename(file_path, backup_file)
                     logger.info(f"Created backup of corrupted file as {backup_file}")
                 except OSError as e:
                     logger.error(f"Failed to create backup file: {str(e)}")
                 return {}
     except OSError as e:
-        logger.error(f"Error accessing {COMPUTERS_FILE}: {str(e)}")
+        logger.error(f"Error accessing file {file_path}: {str(e)}")
         return {}
-
-def save_computers(computers):
-    """Speichert die Computer"""
-    with open(COMPUTERS_FILE, 'w') as f:
-        json.dump(computers, f, indent=2)
 
 def is_valid_mac(mac):
     """Überprüft ob eine MAC-Adresse gültig ist"""

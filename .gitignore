@@ -1,2 +1,4 @@
 .env
 computers.json
+/__pycache__
+/tests/__pycache__
