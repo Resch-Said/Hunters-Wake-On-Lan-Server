@@ -135,24 +135,59 @@ async def ping(ip):
     except:
         return False
 
-async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int, name: str, ip: str):
-    """Überprüft den Status eines Computers nach dem Aufwecken"""
+async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int, name: str, ip: str, mac: str):
+    """Überprüft den Status eines Computers und sendet Wake-Signale wenn nötig"""
     tries = 0
-    max_tries = 30  # 5 Minuten (10 Sekunden * 30)
     
-    while tries < max_tries:
+    # Erste Statusprüfung
+    if await ping(ip):
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"✅ Computer '{name}' ist bereits online!"
+        )
+        return
+    
+    # Computer ist offline, sende erstes Wake-Signal
+    try:
+        send_magic_packet(mac)
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"📨 Wake-on-LAN Paket wurde an '{name}' gesendet!"
+        )
+    except Exception as e:
+        logger.error(f"Fehler beim Senden des Wake-Pakets an {name}: {str(e)}")
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"❌ Fehler beim Senden des Wake-Pakets an '{name}': {str(e)}"
+        )
+        return
+    
+    # Warte und prüfe wiederholt den Status
+    while tries < MAX_TRIES:
+        await asyncio.sleep(CHECK_INTERVAL)
+        tries += 1
+        
         if await ping(ip):
             await context.bot.send_message(
                 chat_id=chat_id,
                 text=f"✅ Computer '{name}' ist jetzt online!"
             )
             return
-        await asyncio.sleep(10)  # 10 Sekunden warten
-        tries += 1
+            
+        # Sende alle 3 Versuche ein neues Wake-Signal
+        if tries % 3 == 0:
+            try:
+                send_magic_packet(mac)
+                await context.bot.send_message(
+                    chat_id=chat_id,
+                    text=f"📨 Sende erneutes Wake-on-LAN Paket an '{name}' (Versuch {tries}/{MAX_TRIES})"
+                )
+            except Exception as e:
+                logger.error(f"Fehler beim Senden des Wake-Pakets an {name}: {str(e)}")
     
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"⚠️ Computer '{name}' konnte nicht aufgeweckt werden!"
+        text=f"⚠️ Computer '{name}' konnte nicht aufgeweckt werden nach {MAX_TRIES} Versuchen!"
     )
 
 async def check_permission(update: Update):
@@ -248,9 +283,24 @@ async def list_computers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text(message)
 
+async def send_multiple_magic_packets(mac_address, retries=3, interval=1):
+    """Sendet mehrere Wake-on-LAN Pakete an eine MAC-Adresse"""
+    for i in range(retries):
+        try:
+            send_magic_packet(mac_address)
+            if i < retries - 1:  # Warte nicht nach dem letzten Versuch
+                await asyncio.sleep(interval)
+        except Exception as e:
+            logger.error(f"Fehler beim Senden des Wake-Pakets (Versuch {i+1}): {str(e)}")
+            raise e
+
 async def wake(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Weckt einen Computer auf"""
     if not await check_permission(update): return
+    
+    if not update or not update.message:
+        logger.error("Update oder Message-Objekt ist None")
+        return
     
     if not context.args:
         await update.message.reply_text("❌ Bitte nutze: /wake [name]")
@@ -263,58 +313,39 @@ async def wake(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"❌ Computer '{name}' nicht gefunden!")
         return
     
-    try:
-        send_magic_packet(computers[name]["mac"])
-        await update.message.reply_text(f"📨 Wake-on-LAN Paket wurde an '{name}' gesendet!")
-        
-        # Starte Status-Überprüfung
-        asyncio.create_task(check_computer_status(
-            context,
-            update.effective_chat.id,
-            name,
-            computers[name]["ip"]
-        ))
-        
-    except Exception as e:
-        await update.message.reply_text(f"❌ Fehler beim Senden: {str(e)}")
+    # Starte Status-Überprüfung und Wake-Prozess
+    asyncio.create_task(check_computer_status(
+        context,
+        update.effective_chat.id,
+        name,
+        computers[name]["ip"],
+        computers[name]["mac"]
+    ))
 
 async def wakeall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Weckt alle Computer auf"""
     if not await check_permission(update): return
+    
+    if not update or not update.message:
+        logger.error("Update oder Message-Objekt ist None")
+        return
     
     computers = load_computers()
     if not computers:
         await update.message.reply_text("❌ Keine Computer gespeichert!")
         return
     
-    success = []
-    failed = []
+    await update.message.reply_text("🔍 Starte Wake-Prozess für alle Computer...")
     
+    # Starte Status-Überprüfung für jeden Computer
     for name, data in computers.items():
-        try:
-            send_magic_packet(data["mac"])
-            success.append(name)
-            # Starte Status-Überprüfung für jeden Computer
-            asyncio.create_task(check_computer_status(
-                context,
-                update.effective_chat.id,
-                name,
-                data["ip"]
-            ))
-        except Exception as e:
-            failed.append(name)
-    
-    # Erstelle Statusnachricht
-    message = "📨 Wake-on-LAN Status:\n\n"
-    if success:
-        message += "✅ Erfolgreich gesendet an:\n"
-        message += "\n".join(f"• {name}" for name in success)
-        message += "\n\n"
-    if failed:
-        message += "❌ Fehler beim Senden an:\n"
-        message += "\n".join(f"• {name}" for name in failed)
-    
-    await update.message.reply_text(message)
+        asyncio.create_task(check_computer_status(
+            context,
+            update.effective_chat.id,
+            name,
+            data["ip"],
+            data["mac"]
+        ))
 
 async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Zeigt den Status aller Computer an"""
