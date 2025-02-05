@@ -378,33 +378,37 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text("🔍 Scanne Netzwerk nach Geräten...")
     
     try:
-        # Finde das Standardgateway und Netzwerkinterface
-        gateways = netifaces.gateways()
-        default_gateway = gateways['default'][netifaces.AF_INET][0]
-        default_interface = gateways['default'][netifaces.AF_INET][1]
+        # Nutze arp -a für Windows und Unix-Systeme
+        if platform.system().lower() == 'windows':
+            output = subprocess.check_output('arp -a', shell=True).decode('utf-8', errors='ignore')
+        else:
+            output = subprocess.check_output(['arp', '-a']).decode('utf-8', errors='ignore')
         
-        # Bestimme das Netzwerk basierend auf dem Interface
-        addrs = netifaces.ifaddresses(default_interface)
-        ip_info = addrs[netifaces.AF_INET][0]
-        ip_addr = ip_info['addr']
-        netmask = ip_info['netmask']
-        
-        # Berechne das Netzwerk
-        network = ipaddress.IPv4Network(f"{ip_addr}/{netmask}", strict=False)
-        target_ip = str(network.network_address) + "/" + str(network.prefixlen)
-        
-        # Erstelle und sende ARP-Request
-        arp = ARP(pdst=target_ip)
-        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
-        packet = ether/arp
-        
-        await status_message.edit_text("🔍 Scanne Netzwerk... Dies kann einen Moment dauern.")
-        
-        result = srp(packet, timeout=3, verbose=0)[0]
-        
+        # Parse die Ausgabe
         devices = []
-        for sent, received in result:
-            devices.append({'ip': received.psrc, 'mac': received.hwsrc})
+        lines = output.split('\n')
+        
+        for line in lines:
+            # Überspringe leere Zeilen
+            if not line.strip():
+                continue
+                
+            # Verschiedene Parsing-Logik für verschiedene Betriebssysteme
+            if platform.system().lower() == 'windows':
+                # Windows Format: "Internet Address      Physical Address      Type"
+                parts = [p for p in line.split() if p]
+                if len(parts) >= 2 and is_valid_ip(parts[0]):
+                    ip = parts[0]
+                    mac = parts[1].replace('-', ':')
+                    if is_valid_mac(mac):
+                        devices.append({'ip': ip, 'mac': mac})
+            else:
+                # Unix Format: "hostname (ip) at mac on interface"
+                match = re.search(r'\(([\d.]+)\)\s+at\s+([0-9a-fA-F:]+)', line)
+                if match:
+                    ip, mac = match.groups()
+                    if is_valid_ip(ip) and is_valid_mac(mac):
+                        devices.append({'ip': ip, 'mac': mac})
         
         if not devices:
             await status_message.edit_text("❌ Keine Geräte gefunden!")
