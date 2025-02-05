@@ -11,9 +11,6 @@ import platform
 import subprocess
 from telegram.request import HTTPXRequest
 from telegram.error import TimedOut, NetworkError
-from scapy.all import ARP, Ether, srp
-import ipaddress
-import netifaces
 import socket
 
 # Logging konfigurieren
@@ -378,21 +375,38 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text("🔍 Scanne Netzwerk nach Geräten...")
     
     try:
-        # Nutze arp -a für Windows und Unix-Systeme
+        # Bestimme das richtige Kommando je nach Betriebssystem
         if platform.system().lower() == 'windows':
-            output = subprocess.check_output('arp -a', shell=True).decode('utf-8', errors='ignore')
+            command = 'arp -a'
+            shell = True
         else:
-            output = subprocess.check_output(['arp', '-a']).decode('utf-8', errors='ignore')
+            # Versuche verschiedene Pfade für arp auf Unix-Systemen
+            arp_paths = ['/usr/sbin/arp', '/sbin/arp', 'arp']
+            command = None
+            for path in arp_paths:
+                try:
+                    subprocess.check_output([path, '-n'], stderr=subprocess.DEVNULL)
+                    command = [path, '-n']  # -n verhindert DNS-Lookups für schnellere Ergebnisse
+                    shell = False
+                    break
+                except (subprocess.SubprocessError, FileNotFoundError):
+                    continue
+            
+            if command is None:
+                raise FileNotFoundError("Konnte den arp-Befehl nicht finden")
+        
+        # Führe das Kommando aus
+        output = subprocess.check_output(command, shell=shell).decode('utf-8', errors='ignore')
         
         # Parse die Ausgabe
         devices = []
         lines = output.split('\n')
         
         for line in lines:
-            # Überspringe leere Zeilen
-            if not line.strip():
+            # Überspringe leere Zeilen und Header
+            if not line.strip() or '(' in line or 'Interface' in line:
                 continue
-                
+            
             # Verschiedene Parsing-Logik für verschiedene Betriebssysteme
             if platform.system().lower() == 'windows':
                 # Windows Format: "Internet Address      Physical Address      Type"
@@ -403,11 +417,12 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     if is_valid_mac(mac):
                         devices.append({'ip': ip, 'mac': mac})
             else:
-                # Unix Format: "hostname (ip) at mac on interface"
-                match = re.search(r'\(([\d.]+)\)\s+at\s+([0-9a-fA-F:]+)', line)
-                if match:
-                    ip, mac = match.groups()
-                    if is_valid_ip(ip) and is_valid_mac(mac):
+                # Unix Format (mit -n): "IP-Address   HWtype  HWaddress  Flags Mask  Iface"
+                parts = [p for p in line.split() if p]
+                if len(parts) >= 3 and is_valid_ip(parts[0]):
+                    ip = parts[0]
+                    mac = parts[2]
+                    if is_valid_mac(mac):
                         devices.append({'ip': ip, 'mac': mac})
         
         if not devices:
