@@ -11,6 +11,10 @@ import platform
 import subprocess
 from telegram.request import HTTPXRequest
 from telegram.error import TimedOut, NetworkError
+from scapy.all import ARP, Ether, srp
+import ipaddress
+import netifaces
+import socket
 
 # Logging konfigurieren
 logging.basicConfig(
@@ -223,7 +227,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/list - Zeigt alle Computer\n"
         "/add [name] [mac] [ip] - Fügt einen Computer hinzu\n"
         "/remove [name] - Entfernt einen Computer\n"
-        "/status - Zeigt den Online-Status aller Computer"
+        "/status - Zeigt den Online-Status aller Computer\n"
+        "/scan - Zeigt alle Geräte im Netzwerk"
     )
 
 async def add_computer(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -366,6 +371,63 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await status_message.edit_text(message)
 
+async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Scannt das Netzwerk nach aktiven Geräten"""
+    if not await check_permission(update): return
+    
+    status_message = await update.message.reply_text("🔍 Scanne Netzwerk nach Geräten...")
+    
+    try:
+        # Finde das Standardgateway und Netzwerkinterface
+        gateways = netifaces.gateways()
+        default_gateway = gateways['default'][netifaces.AF_INET][0]
+        default_interface = gateways['default'][netifaces.AF_INET][1]
+        
+        # Bestimme das Netzwerk basierend auf dem Interface
+        addrs = netifaces.ifaddresses(default_interface)
+        ip_info = addrs[netifaces.AF_INET][0]
+        ip_addr = ip_info['addr']
+        netmask = ip_info['netmask']
+        
+        # Berechne das Netzwerk
+        network = ipaddress.IPv4Network(f"{ip_addr}/{netmask}", strict=False)
+        target_ip = str(network.network_address) + "/" + str(network.prefixlen)
+        
+        # Erstelle und sende ARP-Request
+        arp = ARP(pdst=target_ip)
+        ether = Ether(dst="ff:ff:ff:ff:ff:ff")
+        packet = ether/arp
+        
+        await status_message.edit_text("🔍 Scanne Netzwerk... Dies kann einen Moment dauern.")
+        
+        result = srp(packet, timeout=3, verbose=0)[0]
+        
+        devices = []
+        for sent, received in result:
+            devices.append({'ip': received.psrc, 'mac': received.hwsrc})
+        
+        if not devices:
+            await status_message.edit_text("❌ Keine Geräte gefunden!")
+            return
+            
+        message = "🖥️ Gefundene Geräte im Netzwerk:\n\n"
+        for device in devices:
+            # Versuche den Hostnamen zu ermitteln
+            try:
+                hostname = socket.gethostbyaddr(device['ip'])[0]
+            except:
+                hostname = "Unbekannt"
+                
+            message += f"• IP: {device['ip']}\n  MAC: {device['mac']}\n  Name: {hostname}\n\n"
+        
+        message += "\nUm ein Gerät hinzuzufügen, nutze:\n/add [name] [mac] [ip]"
+        
+        await status_message.edit_text(message)
+        
+    except Exception as e:
+        logger.error(f"Fehler beim Netzwerk-Scan: {str(e)}")
+        await status_message.edit_text(f"❌ Fehler beim Scannen des Netzwerks: {str(e)}")
+
 def main():
     """Startet den Bot"""
     # Request-Parameter für bessere Timeout-Behandlung
@@ -407,6 +469,7 @@ def main():
     application.add_handler(CommandHandler("wake", wake))
     application.add_handler(CommandHandler("wakeall", wakeall))
     application.add_handler(CommandHandler("status", check_status))
+    application.add_handler(CommandHandler("scan", scan_network))
     
     # Starte den Bot
     application.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
