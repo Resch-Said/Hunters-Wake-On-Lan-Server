@@ -375,6 +375,11 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_message = await update.message.reply_text("🔍 Scanne Netzwerk nach Geräten...")
     
     try:
+        # Lade gespeicherte Computer für Vergleich
+        saved_computers = load_computers()
+        saved_macs = {data['mac'].lower() for data in saved_computers.values()}
+        saved_ips = {data['ip'] for data in saved_computers.values()}
+        
         # Bestimme das richtige Kommando je nach Betriebssystem
         if platform.system().lower() == 'windows':
             command = 'arp -a'
@@ -431,15 +436,38 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         message = "🖥️ Gefundene Geräte im Netzwerk:\n\n"
         for device in devices:
+            # Prüfe ob das Gerät bereits gespeichert ist
+            is_saved = device['mac'].lower() in saved_macs
+            saved_name = None
+            if is_saved:
+                # Finde den Namen des gespeicherten Computers
+                for name, data in saved_computers.items():
+                    if data['mac'].lower() == device['mac'].lower():
+                        saved_name = name
+                        break
+            
             # Versuche den Hostnamen zu ermitteln
             try:
                 hostname = socket.gethostbyaddr(device['ip'])[0]
             except:
                 hostname = "Unbekannt"
-                
-            message += f"• IP: {device['ip']}\n  MAC: {device['mac']}\n  Name: {hostname}\n\n"
+            
+            # Füge Status-Emoji hinzu
+            status_emoji = "💾 " if is_saved else "📝 "
+            
+            message += f"{status_emoji}Gerät:\n"
+            message += f"  IP: {device['ip']}\n"
+            message += f"  MAC: {device['mac']}\n"
+            message += f"  Name: {hostname}\n"
+            if is_saved:
+                message += f"  ✅ Bereits gespeichert als: {saved_name}\n"
+            message += "\n"
         
-        message += "\nUm ein Gerät hinzuzufügen, nutze:\n/add [name] [mac] [ip]"
+        message += "\nLegende:\n"
+        message += "💾 Bereits gespeichert\n"
+        message += "📝 Nicht gespeichert\n\n"
+        message += "Um ein neues Gerät hinzuzufügen, nutze:\n"
+        message += "/add [name] [mac] [ip]"
         
         await status_message.edit_text(message)
         
