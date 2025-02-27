@@ -20,6 +20,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Emoji Konstanten
+EMOJI = {
+    'COMPUTER': '🖥️',
+    'CHECK': '✅',
+    'CROSS': '❌',
+    'MAIL': '📨',
+    'WARNING': '⚠️',
+    'MAGNIFIER': '🔍',
+    'GREEN_CIRCLE': '🟢',
+    'RED_CIRCLE': '🔴',
+    'FLOPPY': '💾',
+    'MEMO': '📝'
+}
+
 def ensure_env_defaults(env_path='.env'):
     """Stellt sicher, dass alle Standardwerte in der .env-Datei vorhanden sind"""
     defaults = {
@@ -144,7 +158,7 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
     if await ping(ip):
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"✅ Computer '{name}' ist bereits online!"
+            text=f"{EMOJI['CHECK']} Computer '{name}' ist bereits online!"
         )
         return
     
@@ -153,13 +167,13 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
         send_magic_packet(mac)
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"📨 Wake-on-LAN Paket wurde an '{name}' gesendet!"
+            text=f"{EMOJI['MAIL']} Wake-on-LAN Paket wurde an '{name}' gesendet!"
         )
     except Exception as e:
         logger.error(f"Fehler beim Senden des Wake-Pakets an {name}: {str(e)}")
         await context.bot.send_message(
             chat_id=chat_id,
-            text=f"❌ Fehler beim Senden des Wake-Pakets an '{name}': {str(e)}"
+            text=f"{EMOJI['CROSS']} Fehler beim Senden des Wake-Pakets an '{name}': {str(e)}"
         )
         return
     
@@ -171,7 +185,7 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
         if await ping(ip):
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"✅ Computer '{name}' ist jetzt online!"
+                text=f"{EMOJI['CHECK']} Computer '{name}' ist jetzt online!"
             )
             return
             
@@ -181,14 +195,14 @@ async def check_computer_status(context: ContextTypes.DEFAULT_TYPE, chat_id: int
                 send_magic_packet(mac)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"📨 Sende erneutes Wake-on-LAN Paket an '{name}' (Versuch {tries}/{MAX_TRIES})"
+                    text=f"{EMOJI['MAIL']} Sende erneutes Wake-on-LAN Paket an '{name}' (Versuch {tries}/{MAX_TRIES})"
                 )
             except Exception as e:
                 logger.error(f"Fehler beim Senden des Wake-Pakets an {name}: {str(e)}")
     
     await context.bot.send_message(
         chat_id=chat_id,
-        text=f"⚠️ Computer '{name}' konnte nicht aufgeweckt werden nach {MAX_TRIES} Versuchen!"
+        text=f"{EMOJI['WARNING']} Computer '{name}' konnte nicht aufgeweckt werden nach {MAX_TRIES} Versuchen!"
     )
 
 async def check_permission(update: Update):
@@ -200,7 +214,7 @@ async def check_permission(update: Update):
     if user_id not in ALLOWED_USERS:
         logger.warning(f"Unbefugter Zugriffsversuch von User ID: {user_id}")
         if update.message:
-            await update.message.reply_text("❌ Sorry, du bist nicht berechtigt diesen Bot zu nutzen.")
+            await update.message.reply_text(f"{EMOJI['CROSS']} Sorry, du bist nicht berechtigt diesen Bot zu nutzen.")
         return False
     return True
 
@@ -217,7 +231,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     logger.debug("Sende Begrüßungsnachricht")
     await update.message.reply_text(
-        "🖥️ Wake-on-LAN Bot\n\n"
+        f"{EMOJI['COMPUTER']} Wake-on-LAN Bot\n\n"
         "Verfügbare Befehle:\n"
         "/wake [name] - Startet einen Computer\n"
         "/wakeall - Startet alle Computer\n"
@@ -234,30 +248,30 @@ async def add_computer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     args = context.args
     if len(args) != 3:
-        await update.message.reply_text("❌ Bitte nutze: /add [name] [mac] [ip]")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Bitte nutze: /add [name] [mac] [ip]")
         return
     
     name, mac, ip = args
     if not is_valid_mac(mac):
-        await update.message.reply_text("❌ Ungültige MAC-Adresse! Format: XX:XX:XX:XX:XX:XX")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Ungültige MAC-Adresse! Format: XX:XX:XX:XX:XX:XX")
         return
     
     if not is_valid_ip(ip):
-        await update.message.reply_text("❌ Ungültige IP-Adresse! Format: XXX.XXX.XXX.XXX")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Ungültige IP-Adresse! Format: XXX.XXX.XXX.XXX")
         return
     
     computers = load_computers()
     computers[name] = {"mac": mac, "ip": ip}
     save_computers(computers)
     
-    await update.message.reply_text(f"✅ Computer '{name}' wurde hinzugefügt!")
+    await update.message.reply_text(f"{EMOJI['CHECK']} Computer '{name}' wurde hinzugefügt!")
 
 async def remove_computer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Entfernt einen Computer"""
     if not await check_permission(update): return
     
     if not context.args:
-        await update.message.reply_text("❌ Bitte nutze: /remove [name]")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Bitte nutze: /remove [name]")
         return
     
     name = context.args[0]
@@ -266,9 +280,9 @@ async def remove_computer(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if name in computers:
         del computers[name]
         save_computers(computers)
-        await update.message.reply_text(f"✅ Computer '{name}' wurde entfernt!")
+        await update.message.reply_text(f"{EMOJI['CHECK']} Computer '{name}' wurde entfernt!")
     else:
-        await update.message.reply_text(f"❌ Computer '{name}' nicht gefunden!")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Computer '{name}' nicht gefunden!")
 
 async def list_computers(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Listet alle Computer auf"""
@@ -279,7 +293,7 @@ async def list_computers(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Keine Computer gespeichert!")
         return
     
-    message = "🖥️ Gespeicherte Computer:\n\n"
+    message = f"{EMOJI['COMPUTER']} Gespeicherte Computer:\n\n"
     for name, data in computers.items():
         message += f"• {name}: {data['mac']} (IP: {data['ip']})\n"
     
@@ -305,14 +319,14 @@ async def wake(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     
     if not context.args:
-        await update.message.reply_text("❌ Bitte nutze: /wake [name]")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Bitte nutze: /wake [name]")
         return
     
     name = context.args[0]
     computers = load_computers()
     
     if name not in computers:
-        await update.message.reply_text(f"❌ Computer '{name}' nicht gefunden!")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Computer '{name}' nicht gefunden!")
         return
     
     # Starte Status-Überprüfung und Wake-Prozess
@@ -334,10 +348,10 @@ async def wakeall(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     computers = load_computers()
     if not computers:
-        await update.message.reply_text("❌ Keine Computer gespeichert!")
+        await update.message.reply_text(f"{EMOJI['CROSS']} Keine Computer gespeichert!")
         return
     
-    await update.message.reply_text("🔍 Starte Wake-Prozess für alle Computer...")
+    await update.message.reply_text(f"{EMOJI['MAGNIFIER']} Starte Wake-Prozess für alle Computer...")
     
     # Starte Status-Überprüfung für jeden Computer
     for name, data in computers.items():
@@ -358,12 +372,12 @@ async def check_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Keine Computer gespeichert!")
         return
     
-    status_message = await update.message.reply_text("🔍 Überprüfe Computer-Status...")
+    status_message = await update.message.reply_text(f"{EMOJI['MAGNIFIER']} Überprüfe Computer-Status...")
     
-    message = "🖥️ Computer Status:\n\n"
+    message = f"{EMOJI['COMPUTER']} Computer Status:\n\n"
     for name, data in computers.items():
         is_online = await ping(data['ip'])
-        status = "🟢 Online" if is_online else "🔴 Offline"
+        status = f"{EMOJI['GREEN_CIRCLE']} Online" if is_online else f"{EMOJI['RED_CIRCLE']} Offline"
         message += f"• {name}: {status}\n"
     
     await status_message.edit_text(message)
@@ -372,7 +386,7 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Scannt das Netzwerk nach aktiven Geräten"""
     if not await check_permission(update): return
     
-    status_message = await update.message.reply_text("🔍 Scanne Netzwerk nach Geräten...")
+    status_message = await update.message.reply_text(f"{EMOJI['MAGNIFIER']} Scanne Netzwerk nach Geräten...")
     
     try:
         # Lade gespeicherte Computer für Vergleich
@@ -431,10 +445,10 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         devices.append({'ip': ip, 'mac': mac})
         
         if not devices:
-            await status_message.edit_text("❌ Keine Geräte gefunden!")
+            await status_message.edit_text(f"{EMOJI['CROSS']} Keine Geräte gefunden!")
             return
             
-        message = "🖥️ Gefundene Geräte im Netzwerk:\n\n"
+        message = f"{EMOJI['COMPUTER']} Gefundene Geräte im Netzwerk:\n\n"
         for device in devices:
             # Prüfe ob das Gerät bereits gespeichert ist
             is_saved = device['mac'].lower() in saved_macs
@@ -453,19 +467,19 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 hostname = "Unbekannt"
             
             # Füge Status-Emoji hinzu
-            status_emoji = "💾 " if is_saved else "📝 "
+            status_emoji = f"{EMOJI['FLOPPY']} " if is_saved else f"{EMOJI['MEMO']} "
             
             message += f"{status_emoji}Gerät:\n"
             message += f"  IP: {device['ip']}\n"
             message += f"  MAC: {device['mac']}\n"
             message += f"  Name: {hostname}\n"
             if is_saved:
-                message += f"  ✅ Bereits gespeichert als: {saved_name}\n"
+                message += f"  {EMOJI['CHECK']} Bereits gespeichert als: {saved_name}\n"
             message += "\n"
         
         message += "\nLegende:\n"
-        message += "💾 Bereits gespeichert\n"
-        message += "📝 Nicht gespeichert\n\n"
+        message += f"{EMOJI['FLOPPY']} Bereits gespeichert\n"
+        message += f"{EMOJI['MEMO']} Nicht gespeichert\n\n"
         message += "Um ein neues Gerät hinzuzufügen, nutze:\n"
         message += "/add [name] [mac] [ip]"
         
@@ -473,7 +487,7 @@ async def scan_network(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     except Exception as e:
         logger.error(f"Fehler beim Netzwerk-Scan: {str(e)}")
-        await status_message.edit_text(f"❌ Fehler beim Scannen des Netzwerks: {str(e)}")
+        await status_message.edit_text(f"{EMOJI['CROSS']} Fehler beim Scannen des Netzwerks: {str(e)}")
 
 def main():
     """Startet den Bot"""
